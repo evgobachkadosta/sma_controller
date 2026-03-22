@@ -1,0 +1,25 @@
+[inverter]
+
+# IP address of the SMA inverter on your local network
+host = "192.168.1.100"
+
+
+port = 18443
+
+# Login role
+right = "istl"
+
+password = "YOUR_INVERTER_PASSWORD"
+
+max_power_watts = 180000
+
+
+[control]
+
+csv_dir = "/tmp/day_ahead_price"
+
+price_threshold_eur_mwh = 80.0
+
+limit_power_watts = 500
+
+poll_interval_secs = 60
