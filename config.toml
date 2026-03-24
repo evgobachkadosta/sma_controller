@@ -1,8 +1,7 @@
 [inverter]
 
 # IP address of the SMA inverter on your local network
-host = "192.168.1.100"
-
+host = "192.168.1.200"
 
 port = 18443
 
@@ -21,5 +20,3 @@ csv_dir = "/tmp/day_ahead_price"
 price_threshold_eur_mwh = 80.0
 
 limit_power_watts = 500
-
-poll_interval_secs = 60

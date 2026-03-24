@@ -5,12 +5,16 @@ use tracing::{info, warn};
 
 use crate::config::Config;
 
+/// Request body for POST /dyn/login.json
 #[derive(Debug, Serialize)]
 struct LoginRequest<'a> {
     right: &'a str,
     pass: &'a str,
 }
 
+/// Response body from POST /dyn/login.json
+/// SMA returns: {"result":{"sid":"_KxIPZt6qG_61Y98"}}
+/// On error it may return: {"err":503} or similar
 #[derive(Debug, Deserialize)]
 struct LoginResponse {
     result: Option<LoginResult>,
@@ -22,6 +26,8 @@ struct LoginResult {
     sid: String,
 }
 
+/// Request body for POST /dyn/setParamValues.json?sid=...
+/// Example: {"destDev":[],"values":[{"6802_00866900":{"1":[20000]}}]}
 #[derive(Debug, Serialize)]
 struct SetParamRequest {
     #[serde(rename = "destDev")]
@@ -58,6 +64,7 @@ pub struct InverterClient {
 }
 
 impl InverterClient {
+
     pub fn new(config: Config) -> Result<Self> {
         let http = Client::builder()
             .danger_accept_invalid_certs(true)
@@ -129,7 +136,7 @@ impl InverterClient {
             Ok(()) => Ok(()),
             Err(e) => {
                 warn!(
-                    "set_power_watts({}) failed: {}. Attempting re-login",
+                    "set_power_watts({}) failed: {}. Attempting re-login...",
                     watts, e
                 );
                 self.sid = None;
@@ -142,7 +149,7 @@ impl InverterClient {
     }
 
     async fn set_power_inner(&mut self, watts: u32) -> Result<()> {
-        let sid = self
+     	 let sid = self
             .sid
             .as_deref()
             .context("No active session — call login() first")?;
@@ -229,7 +236,7 @@ impl InverterClient {
     ///     }
     ///   }
     /// }
-    async fn get_power_limit_watts(&self) -> Result<u32> {
+    pub async fn get_power_limit_watts(&self) -> Result<u32> {
         let sid = self
             .sid
             .as_deref()
@@ -279,6 +286,7 @@ impl InverterClient {
 
         for (_serial, device_data) in result {
             if let Some(param_data) = device_data.get(POWER_LIMIT_PARAM) {
+                // param_data shape: {"1": [{"val": 180000}]}
                 let val = param_data
                     .get("1")
                     .and_then(|arr| arr.get(0))
@@ -292,8 +300,9 @@ impl InverterClient {
                         return Ok(watts);
                     }
                     None => {
+                        // val can be null if the inverter hasn't set the parameter yet
                         bail!(
-                            "getValues: {} returned null or unexpected val shape. \
+                            "getValues: {} returned null. \
                              Raw param data: {}",
                             POWER_LIMIT_PARAM,
                             param_data
@@ -310,8 +319,6 @@ impl InverterClient {
         );
     }
 
-    /// Gracefully log out from the inverter.
-    /// Errors here are non-fatal — we log them but don't propagate.
     pub async fn logout(&self) {
         if let Some(sid) = &self.sid {
             let url = format!(

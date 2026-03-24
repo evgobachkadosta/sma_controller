@@ -3,21 +3,27 @@ use chrono::Local;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
+/// Top-level configuration loaded from config.toml
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub inverter: InverterConfig,
     pub control: ControlConfig,
 }
 
+/// Inverter connection and authentication settings
 #[derive(Debug, Deserialize, Clone)]
 pub struct InverterConfig {
+    /// IP address or hostname of the inverter, e.g. "192.168.1.100"
     pub host: String,
 
+    /// Port the inverter webconnect interface listens on (usually 18443)
     #[serde(default = "default_port")]
     pub port: u16,
 
+    /// Login right/role — typically "istl" for installer
     pub right: String,
 
+    /// Login password
     pub password: String,
 
     /// Maximum rated output of the inverter in watts (used when restoring full power)
@@ -28,7 +34,6 @@ pub struct InverterConfig {
 fn default_port() -> u16 {
     18443
 }
-
 #[derive(Debug, Deserialize, Clone)]
 pub struct ControlConfig {
     pub csv_dir: PathBuf,
@@ -36,13 +41,6 @@ pub struct ControlConfig {
     pub price_threshold_eur_mwh: f64,
 
     pub limit_power_watts: u32,
-
-    #[serde(default = "default_poll_interval")]
-    pub poll_interval_secs: u64,
-}
-
-fn default_poll_interval() -> u64 {
-    60
 }
 
 impl Config {
@@ -79,10 +77,6 @@ impl Config {
         anyhow::ensure!(
             self.control.price_threshold_eur_mwh > 0.0,
             "control.price_threshold_eur_mwh must be > 0"
-        );
-        anyhow::ensure!(
-            self.control.poll_interval_secs > 0,
-            "control.poll_interval_secs must be > 0"
         );
         Ok(())
     }

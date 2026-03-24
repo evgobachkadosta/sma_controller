@@ -7,7 +7,6 @@ use anyhow::{Context, Result};
 use std::path::PathBuf;
 use tracing::info;
 
-/// On SIGTERM or Ctrl-C, it restores full power and logs out cleanly.
 #[tokio::main]
 async fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -24,8 +23,7 @@ async fn main() -> Result<()> {
         .with_target(false)
         .init();
 
-    info!("sma-controller starting up");
-    info!("Config loaded from: {}", config_path.display());
+    info!("sma-controller starting");
     info!(
         "Inverter: {}:{} (max {} W)",
         config.inverter.host, config.inverter.port, config.inverter.max_power_watts
@@ -37,49 +35,13 @@ async fn main() -> Result<()> {
         config.control.csv_dir.display()
     );
 
-    let mut controller = controller::Controller::new(config)?;
-
-    let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel::<()>();
-
-    tokio::spawn(async move {
-        #[cfg(unix)]
-        {
-            use tokio::signal::unix::{signal, SignalKind};
-            let mut sigterm = signal(SignalKind::terminate())
-                .expect("Failed to register SIGTERM handler");
-            tokio::select! {
-                _ = tokio::signal::ctrl_c() => {},
-                _ = sigterm.recv() => {},
-            }
-        }
-        #[cfg(not(unix))]
-        {
-            let _ = tokio::signal::ctrl_c().await;
-        }
-        info!("Shutdown signal received");
-        let _ = shutdown_tx.send(());
-    });
-
-    tokio::select! {
-        result = controller.run() => {
-            if let Err(e) = result {
-                tracing::error!("Controller exited with error: {}", e);
-                controller.shutdown().await;
-                return Err(e);
-            }
-        }
-        _ = &mut shutdown_rx => {
-            controller.shutdown().await;
-        }
-    }
-
-    info!("sma-controller exited cleanly");
-    Ok(())
+    controller::run_once(config).await
 }
+
 
 fn parse_args(args: &[String]) -> Result<PathBuf> {
     let mut config_path: Option<PathBuf> = None;
-    let mut iter = args.iter().skip(1);
+    let mut iter = args.iter().skip(1); // skip argv[0]
 
     while let Some(arg) = iter.next() {
         match arg.as_str() {
@@ -99,7 +61,6 @@ fn parse_args(args: &[String]) -> Result<PathBuf> {
         }
     }
 
-
     config_path.context(
         "Missing required argument: --config <path>\nUse --help for usage.",
     )
@@ -115,14 +76,11 @@ Options:
 
 Environment:
   RUST_LOG              Log level filter (default: info)
-                        Examples: debug, warn, sma_controller=trace
+                        Examples: debug, warn
 
-The process runs indefinitely, polling the inverter every N seconds.
-Launch it from cron at midnight with the new daily price CSV already in place:
+Intended to be run by cron every 10 minutes:
 
-  0 0 * * * /usr/local/bin/sma-controller --config /etc/sma-controller/config.toml
-
-Send SIGTERM or press Ctrl-C to stop gracefully (restores full power first).
+  */10 * * * * /usr/local/bin/sma-controller --config /etc/sma-controller/config.toml
 "#,
         prog = prog
     );
